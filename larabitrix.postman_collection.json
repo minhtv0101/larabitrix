@@ -1,0 +1,238 @@
+{
+  "info": {
+    "name": "Larabitrix API",
+    "_postman_id": "larabitrix-collection-v1",
+    "description": "Bộ API cho Larabitrix — Cloudflare Worker middleware cho Bitrix24.\n\nCách dùng:\n1. Import collection này vào Postman\n2. Vào tab Variables và điền webhook_url và your_api_key",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "webhook_url",
+      "value": "https://larabitrix.hdva.workers.dev",
+      "description": "URL Worker của bạn"
+    },
+    {
+      "key": "your_api_key",
+      "value": "",
+      "description": "WORKER_API_KEY bạn đã set bằng wrangler secret put"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{your_api_key}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{webhook_url}}/health",
+              "host": ["{{webhook_url}}"],
+              "path": ["health"]
+            },
+            "description": "Kiểm tra Worker đang chạy. Không cần auth."
+          },
+          "response": [
+            {
+              "name": "OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"success\":true,\"data\":{\"status\":\"ok\"}}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Lists",
+      "item": [
+        {
+          "name": "Lấy danh sách items",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{webhook_url}}/api/lists/:listId?page=1",
+              "host": ["{{webhook_url}}"],
+              "path": ["api", "lists", ":listId"],
+              "variable": [
+                { "key": "listId", "value": "42", "description": "ID của List trong Bitrix24" }
+              ],
+              "query": [
+                { "key": "page", "value": "1", "description": "Trang (mỗi trang 50 items)" },
+                { "key": "filter[trang_thai]", "value": "dang_hoc", "description": "Lọc theo field (tùy chọn)", "disabled": true }
+              ]
+            },
+            "description": "Lấy danh sách items trong một List. Tên trường filter dùng slug (VD: trang_thai thay vì PROPERTY_123)."
+          }
+        },
+        {
+          "name": "Tạo item mới",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{webhook_url}}/api/lists/:listId",
+              "host": ["{{webhook_url}}"],
+              "path": ["api", "lists", ":listId"],
+              "variable": [
+                { "key": "listId", "value": "42" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nguyen Van A\",\n  \"so_buoi_hoc\": 10,\n  \"trang_thai\": \"dang_hoc\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Tạo mới item. Dùng tên trường slug (so_buoi_hoc) thay vì PROPERTY_ID."
+          }
+        },
+        {
+          "name": "Upsert item theo field",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{webhook_url}}/api/lists/:listId/upsert/:field",
+              "host": ["{{webhook_url}}"],
+              "path": ["api", "lists", ":listId", "upsert", ":field"],
+              "variable": [
+                { "key": "listId", "value": "42" },
+                { "key": "field", "value": "ma_hoc_vien", "description": "Tên field slug dùng để tìm kiếm" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ma_hoc_vien\": \"HV001\",\n  \"ten\": \"Nguyen Van A\",\n  \"so_buoi_hoc\": 10,\n  \"trang_thai\": \"dang_hoc\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Tìm theo field, nếu có thì cập nhật (merge), chưa có thì tạo mới. Không bao giờ mất dữ liệu cũ."
+          }
+        },
+        {
+          "name": "Cộng/trừ giá trị số (math)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{webhook_url}}/api/lists/:listId/:itemId/math/:field",
+              "host": ["{{webhook_url}}"],
+              "path": ["api", "lists", ":listId", ":itemId", "math", ":field"],
+              "variable": [
+                { "key": "listId", "value": "42" },
+                { "key": "itemId", "value": "123", "description": "ID của item cần thay đổi" },
+                { "key": "field", "value": "so_buoi_hoc", "description": "Field số cần thay đổi" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": -1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Cộng hoặc trừ giá trị số. amount dương = cộng, âm = trừ.\nVD: trừ 1 buổi học → amount: -1"
+          }
+        },
+        {
+          "name": "Xóa item",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{webhook_url}}/api/lists/:listId/:itemId",
+              "host": ["{{webhook_url}}"],
+              "path": ["api", "lists", ":listId", ":itemId"],
+              "variable": [
+                { "key": "listId", "value": "42" },
+                { "key": "itemId", "value": "123" }
+              ]
+            },
+            "description": "Xóa vĩnh viễn item khỏi List."
+          }
+        },
+        {
+          "name": "Xóa cache schema",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{webhook_url}}/api/cache/:listId",
+              "host": ["{{webhook_url}}"],
+              "path": ["api", "cache", ":listId"],
+              "variable": [
+                { "key": "listId", "value": "42" }
+              ]
+            },
+            "description": "Dùng khi bạn thêm/đổi tên trường trong Bitrix24. Worker sẽ tự học lại schema lần sau."
+          }
+        }
+      ]
+    },
+    {
+      "name": "CRM",
+      "item": [
+        {
+          "name": "Upsert Contact theo SĐT",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{webhook_url}}/api/crm/contact/upsert/PHONE",
+              "host": ["{{webhook_url}}"],
+              "path": ["api", "crm", "contact", "upsert", "PHONE"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"0901234567\",\n  \"NAME\": \"Nguyen Van A\",\n  \"LAST_NAME\": \"Nguyen\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Tìm Contact theo số điện thoại. Có thì cập nhật, chưa có thì tạo mới.\nphone phải là chuỗi số, VD: 0901234567 hoặc +84901234567"
+          }
+        },
+        {
+          "name": "Upsert Company theo MST",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{webhook_url}}/api/crm/company/upsert/UF_CRM_MST",
+              "host": ["{{webhook_url}}"],
+              "path": ["api", "crm", "company", "upsert", "UF_CRM_MST"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uf_crm_mst\": \"0123456789\",\n  \"TITLE\": \"Cong ty TNHH ABC\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Tìm Company theo mã số thuế (UF_CRM_MST). Có thì cập nhật, chưa có thì tạo mới."
+          }
+        },
+        {
+          "name": "Tạo Deal",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{webhook_url}}/api/crm/deal",
+              "host": ["{{webhook_url}}"],
+              "path": ["api", "crm", "deal"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TITLE\": \"Deal khoa hoc thang 5\",\n  \"OPPORTUNITY\": 5000000,\n  \"CURRENCY_ID\": \"VND\",\n  \"CONTACT_ID\": 123,\n  \"COMPANY_ID\": 456\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Tạo Deal mới. Có thể truyền CONTACT_ID và COMPANY_ID để liên kết."
+          }
+        }
+      ]
+    }
+  ]
+}
