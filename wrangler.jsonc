@@ -1,0 +1,35 @@
+{
+  "name": "larabitrix",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Schema cache KV (placeholder IDs — override per environment)
+  "kv_namespaces": [
+    {
+      "binding": "SCHEMA_KV",
+      "id": "placeholder_kv_id"
+    }
+  ],
+
+  "env": {
+    "client_a": {
+      "name": "larabitrix-client-a",
+      "kv_namespaces": [
+        {
+          "binding": "SCHEMA_KV",
+          "id": "placeholder_kv_id_client_a"
+        }
+      ]
+    },
+    "client_b": {
+      "name": "larabitrix-client-b",
+      "kv_namespaces": [
+        {
+          "binding": "SCHEMA_KV",
+          "id": "placeholder_kv_id_client_b"
+        }
+      ]
+    }
+  }
+}
