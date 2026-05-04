@@ -44,12 +44,16 @@ export async function upsertCrmEntity(
   // Build the normalized payload for write
   const writePayload = { ...payload };
   if (uniqueField === "PHONE") {
-    writePayload["PHONE"] = normalizePhone(
-      (payload["PHONE"] as string | undefined) ?? uniqueValue
-    );
+    const rawPhone = payload["PHONE"];
+    // Validate PHONE is a string; reject non-string values before they corrupt CRM data
+    const phoneStr = typeof rawPhone === "string" ? rawPhone : uniqueValue;
+    writePayload["PHONE"] = normalizePhone(phoneStr);
   }
 
   if (existing) {
+    // KNOWN RACE: crm.item.list + crm.item.update is not atomic across concurrent requests.
+    // Two simultaneous upserts with the same unique value can both find zero results and
+    // create duplicate records. Fixing this requires a Durable Object mutex.
     await callApi(env, "crm.item.update", {
       entityTypeId,
       id: existing.id,
@@ -58,10 +62,13 @@ export async function upsertCrmEntity(
     return { action: "updated", id: existing.id };
   }
 
+  // Ensure the unique field value is always authoritative — spread writePayload first
+  // so uniqueField written last cannot be overwritten by caller payload
+  const normalizedUniqueValue =
+    uniqueField === "PHONE" ? normalizePhone(uniqueValue) : uniqueValue;
   const merged: Record<string, unknown> = {
-    [uniqueField]:
-      uniqueField === "PHONE" ? normalizePhone(uniqueValue) : uniqueValue,
     ...writePayload,
+    [uniqueField]: normalizedUniqueValue,
   };
 
   const created = await callApi<CrmItemAddResult>(env, "crm.item.add", {

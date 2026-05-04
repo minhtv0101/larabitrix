@@ -16,12 +16,18 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 export function authMiddleware(): MiddlewareHandler<{ Bindings: Env }> {
   return async (c, next) => {
+    const apiKey = c.env.WORKER_API_KEY;
+    // Fail secure: if secret was never provisioned, reject all requests rather than
+    // letting timingSafeEqual encode "undefined" and accept `Bearer undefined`.
+    if (!apiKey) {
+      return c.json({ success: false, error: "service_unavailable" }, 503);
+    }
     const header = c.req.header("Authorization") ?? "";
     const [scheme, token] = header.split(" ");
     if (
       scheme !== "Bearer" ||
       !token ||
-      !timingSafeEqual(token, c.env.WORKER_API_KEY)
+      !timingSafeEqual(token, apiKey)
     ) {
       return c.json({ success: false, error: "unauthorized" }, 401);
     }

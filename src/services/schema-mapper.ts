@@ -1,5 +1,5 @@
 import type { Env, BitrixSchema, BitrixElement } from "../types";
-import { callApi } from "./bitrix24-client";
+import { callApi, BitrixApiError } from "./bitrix24-client";
 
 const schemaCache = new Map<string, BitrixSchema>();
 const RAM_TTL_MS = 3_600_000; // 1 hour — prevents stale schema surviving long isolate lifetime
@@ -47,7 +47,8 @@ export async function buildListSchema(
 
     // Detect collisions — throw rather than silently overwrite
     if (toBitrix[cleanKey]) {
-      throw new Error(
+      throw new BitrixApiError(
+        "schema_collision",
         `Schema collision: clean key "${cleanKey}" maps to both ${toBitrix[cleanKey]} and ${propertyKey}`
       );
     }

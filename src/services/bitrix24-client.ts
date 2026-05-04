@@ -26,6 +26,19 @@ type BitrixBody<T> = {
 
 const MAX_RETRIES = 3;
 
+/** Throws if the webhook URL is not a valid HTTPS URL (guards against SSRF misconfiguration). */
+function assertValidWebhookUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new BitrixApiError("invalid_config", "BITRIX_WEBHOOK_URL is not a valid URL");
+  }
+  if (parsed.protocol !== "https:") {
+    throw new BitrixApiError("invalid_config", "BITRIX_WEBHOOK_URL must use HTTPS");
+  }
+}
+
 /** Shared fetch+retry logic. Returns parsed body on success, throws on exhaustion. */
 async function fetchBitrix<T>(
   url: string,
@@ -40,15 +53,19 @@ async function fetchBitrix<T>(
       body: JSON.stringify(params),
     });
 
-    // On final attempt, parse and return regardless so callers see the real error code
-    if (res.status === 503 || res.status >= 500) {
+    // Parse body first; guard against non-JSON responses (e.g. Bitrix HTML error pages on 500)
+    let body: BitrixBody<T>;
+    try {
+      body = (await res.json()) as BitrixBody<T>;
+    } catch {
       if (attempt < MAX_RETRIES - 1) {
         await sleep(Math.pow(2, attempt) * 1000);
         continue;
       }
+      throw new BitrixApiError("parse_error", "non-JSON response from Bitrix", res.status);
     }
 
-    const body = (await res.json()) as BitrixBody<T>;
+    // Bitrix application-level error — never retry, surface immediately
     if (body.error) {
       throw new BitrixApiError(
         body.error,
@@ -57,8 +74,12 @@ async function fetchBitrix<T>(
       );
     }
 
+    // HTTP-level server error — retry or exhaust
     if (res.status === 503 || res.status >= 500) {
-      // Exhausted retries with a server error but no Bitrix error body
+      if (attempt < MAX_RETRIES - 1) {
+        await sleep(Math.pow(2, attempt) * 1000);
+        continue;
+      }
       throw new BitrixApiError("rate_limit_exhausted", "max retries reached", res.status);
     }
 
@@ -73,6 +94,7 @@ export async function callApi<T = unknown>(
   method: string,
   params: Record<string, unknown> = {}
 ): Promise<T> {
+  assertValidWebhookUrl(env.BITRIX_WEBHOOK_URL);
   const url = `${env.BITRIX_WEBHOOK_URL.replace(/\/$/, "")}/${method}.json`;
   const body = await fetchBitrix<T>(url, params);
   return body.result as T;
@@ -84,6 +106,7 @@ export async function callApiPaged<T = unknown>(
   method: string,
   params: Record<string, unknown> = {}
 ): Promise<PagedResult<T>> {
+  assertValidWebhookUrl(env.BITRIX_WEBHOOK_URL);
   const url = `${env.BITRIX_WEBHOOK_URL.replace(/\/$/, "")}/${method}.json`;
   const body = await fetchBitrix<T>(url, params);
   return { items: body.result as T, total: body.total ?? 0 };

@@ -42,11 +42,12 @@ export async function paginate(
 ): Promise<PaginateResult> {
   const schema = await buildListSchema(env, iblockId);
 
-  // Translate clean filter keys to Bitrix PROPERTY keys
+  // Translate clean filter keys to Bitrix PROPERTY keys; silently drop unknown keys
+  // (never fall through to raw caller-supplied Bitrix field names — filter injection risk)
   const bitrixFilter: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(filter)) {
-    const propKey = schema.toBitrix[k] ?? k;
-    bitrixFilter[propKey] = v;
+    const propKey = schema.toBitrix[k];
+    if (propKey) bitrixFilter[propKey] = v;
   }
 
   const { items: raw, total } = await callApiPaged<BitrixElement[]>(
@@ -75,7 +76,7 @@ export async function create(
   payload: Record<string, unknown>
 ): Promise<UpsertResult> {
   const schema = await buildListSchema(env, iblockId);
-  const elementCode = `ts-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+  const elementCode = `ts-${Date.now()}-${crypto.randomUUID()}`;
   const { PROPERTY_VALUES } = transformToBitrix(payload, schema);
   const id = await callApi<string>(env, "lists.element.add", {
     IBLOCK_TYPE_ID: IBLOCK_TYPE,
@@ -132,7 +133,7 @@ export async function updateOrCreate(
     return { id: existing.ID, action: "updated", item: merged };
   }
 
-  const elementCode = `ts-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+  const elementCode = `ts-${Date.now()}-${crypto.randomUUID()}`;
   const { PROPERTY_VALUES } = transformToBitrix(payload, schema);
   const newId = await callApi<string>(env, "lists.element.add", {
     IBLOCK_TYPE_ID: IBLOCK_TYPE,
@@ -181,6 +182,8 @@ export async function math(
       `Field "${fieldName}" has non-numeric value`
     );
   }
+  // KNOWN RACE: read-modify-write is not atomic. Concurrent math calls on the same
+  // item can lose increments. Fixing this requires a Durable Object mutex.
   const current = previous + amount;
 
   const merged = { ...existingClean, [fieldName]: current } as Record<

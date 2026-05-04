@@ -16,6 +16,10 @@ crmRouter.patch("/contact/upsert/PHONE", async (c) => {
   if (!phone) {
     return c.json({ success: false, error: "missing_phone" }, 400);
   }
+  // Accepts E.164 (+84901234567) and local formats (0901234567); rejects non-phone strings
+  if (!/^\+?\d[\d\s\-(). ]{5,19}$/.test(phone)) {
+    return c.json({ success: false, error: "invalid_phone_format" }, 400);
+  }
   // entityTypeId 3 = Contact
   const data = await upsertCrmEntity(c.env, 3, "PHONE", phone, body);
   return c.json({ success: true, data });

@@ -12,14 +12,16 @@ import { invalidateSchema } from "../services/schema-mapper";
 export const listsRouter = new Hono<{ Bindings: Env }>();
 
 /** Parses `filter[field]=value` query params into a clean key map. */
-function parseFilterFromQuery(
-  rawQuery: string
-): Record<string, string> {
+function parseFilterFromQuery(absoluteUrl: string): Record<string, string> {
   const filter: Record<string, string> = {};
-  const params = new URLSearchParams(rawQuery);
-  for (const [key, value] of params.entries()) {
-    const match = key.match(/^filter\[(.+)\]$/);
-    if (match?.[1]) filter[match[1]] = value;
+  try {
+    const { searchParams } = new URL(absoluteUrl);
+    for (const [key, value] of searchParams.entries()) {
+      const match = key.match(/^filter\[(.+)\]$/);
+      if (match?.[1]) filter[match[1]] = value;
+    }
+  } catch {
+    // malformed URL — return empty filter
   }
   return filter;
 }
@@ -28,7 +30,7 @@ function parseFilterFromQuery(
 listsRouter.get("/:id", async (c) => {
   const iblockId = c.req.param("id");
   const page = Number(c.req.query("page") ?? 1);
-  const filter = parseFilterFromQuery(c.req.raw.url.split("?")[1] ?? "");
+  const filter = parseFilterFromQuery(c.req.raw.url);
   const data = await paginate(c.env, iblockId, filter, page);
   return c.json({ success: true, data });
 });
