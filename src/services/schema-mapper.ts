@@ -89,7 +89,13 @@ export function transformToBitrix(
   return { PROPERTY_VALUES };
 }
 
-/** Unwraps a Bitrix element into a flat clean object. */
+/** Unwraps a Bitrix element into a flat clean object.
+ *
+ * lists.element.get returns properties as top-level keys (PROPERTY_123, PROPERTY_456)
+ * directly on the element — NOT nested inside PROPERTY_VALUES. We iterate over all
+ * known schema keys at the top level, and also fall back to PROPERTY_VALUES for
+ * write-operation response shapes.
+ */
 export function transformToClean(
   item: BitrixElement,
   schema: BitrixSchema
@@ -97,9 +103,17 @@ export function transformToClean(
   const out: Record<string, unknown> = { id: item.ID };
   if (item.NAME !== undefined) out["name"] = item.NAME;
 
+  // Primary: properties come back as top-level PROPERTY_XXX keys (lists.element.get)
+  for (const [propKey, cleanKey] of Object.entries(schema.toClean)) {
+    if (propKey in item) {
+      out[cleanKey] = unwrapPropertyValue(item[propKey]);
+    }
+  }
+
+  // Fallback: PROPERTY_VALUES shape (used in some write-op responses)
   for (const [propKey, raw] of Object.entries(item.PROPERTY_VALUES ?? {})) {
     const cleanKey = schema.toClean[propKey];
-    if (!cleanKey) continue;
+    if (!cleanKey || cleanKey in out) continue;
     out[cleanKey] = unwrapPropertyValue(raw);
   }
 

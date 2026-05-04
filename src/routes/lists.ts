@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../types";
 import {
   paginate,
+  getById,
   create,
   updateOrCreate,
   math,
@@ -32,6 +33,14 @@ listsRouter.get("/:id", async (c) => {
   const page = Number(c.req.query("page") ?? 1);
   const filter = parseFilterFromQuery(c.req.raw.url);
   const data = await paginate(c.env, iblockId, filter, page);
+  return c.json({ success: true, data });
+});
+
+// GET /api/lists/:id/:itemId — lấy một item theo ID
+listsRouter.get("/:id/:itemId", async (c) => {
+  const iblockId = c.req.param("id");
+  const itemId = c.req.param("itemId");
+  const data = await getById(c.env, iblockId, itemId);
   return c.json({ success: true, data });
 });
 

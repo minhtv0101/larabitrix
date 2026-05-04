@@ -42,11 +42,15 @@ export async function paginate(
 ): Promise<PaginateResult> {
   const schema = await buildListSchema(env, iblockId);
 
-  // Translate clean filter keys to Bitrix PROPERTY keys; silently drop unknown keys
-  // (never fall through to raw caller-supplied Bitrix field names — filter injection risk)
+  // Bitrix system fields allowed in filter (whitelist — prevents raw field injection)
+  const SYSTEM_FILTER_MAP: Record<string, string> = {
+    id: "ID",
+    name: "NAME",
+  };
+
   const bitrixFilter: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(filter)) {
-    const propKey = schema.toBitrix[k];
+    const propKey = schema.toBitrix[k] ?? SYSTEM_FILTER_MAP[k];
     if (propKey) bitrixFilter[propKey] = v;
   }
 
@@ -202,6 +206,22 @@ export async function math(
   });
 
   return { id: itemId, field: fieldName, previous, current };
+}
+
+export async function getById(
+  env: Env,
+  iblockId: string,
+  itemId: string
+): Promise<Record<string, unknown>> {
+  const schema = await buildListSchema(env, iblockId);
+  const result = await callApi<BitrixElement[]>(env, "lists.element.get", {
+    IBLOCK_TYPE_ID: IBLOCK_TYPE,
+    IBLOCK_ID: iblockId,
+    FILTER: { ID: itemId },
+  });
+  const item = (result ?? [])[0];
+  if (!item) throw new BitrixApiError("not_found", `Item ${itemId} not found`);
+  return transformToClean(item, schema);
 }
 
 export async function hardDelete(
