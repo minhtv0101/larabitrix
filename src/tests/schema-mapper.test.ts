@@ -99,7 +99,7 @@ describe("buildListSchema", () => {
     const schema = await buildListSchema(e, "42");
     expect(calls).toBe(1);
     expect(schema.toBitrix["phone"]).toBe("PROPERTY_123");
-    const stored = await e.SCHEMA_KV.get("schema:42");
+    const stored = await e.SCHEMA_KV!.get("schema:42");
     expect(stored).not.toBeNull();
   });
 
@@ -118,10 +118,10 @@ describe("buildListSchema", () => {
 
     // Seed KV directly and invalidate RAM
     const fixture = fixtureSchema();
-    await e.SCHEMA_KV.put("schema:42", JSON.stringify(fixture), { expirationTtl: 86400 });
+    await e.SCHEMA_KV!.put("schema:42", JSON.stringify(fixture), { expirationTtl: 86400 });
     // invalidateSchema clears RAM (we never populated RAM in this test)
     await invalidateSchema(e, "42");
-    await e.SCHEMA_KV.put("schema:42", JSON.stringify(fixture), { expirationTtl: 86400 });
+    await e.SCHEMA_KV!.put("schema:42", JSON.stringify(fixture), { expirationTtl: 86400 });
 
     const schema = await buildListSchema(e, "42");
     expect(calls).toBe(0); // KV hit, no Bitrix call
@@ -133,6 +133,6 @@ describe("buildListSchema", () => {
     await buildListSchema(e, "42");
     await invalidateSchema(e, "42");
 
-    expect(await e.SCHEMA_KV.get("schema:42")).toBeNull();
+    expect(await e.SCHEMA_KV!.get("schema:42")).toBeNull();
   });
 });

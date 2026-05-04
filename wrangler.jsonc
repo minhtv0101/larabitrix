@@ -4,32 +4,18 @@
   "compatibility_date": "2026-05-01",
   "compatibility_flags": ["nodejs_compat"],
 
-  // Schema cache KV (placeholder IDs — override per environment)
-  "kv_namespaces": [
-    {
-      "binding": "SCHEMA_KV",
-      "id": "placeholder_kv_id"
-    }
-  ],
+  // SCHEMA_KV is optional — add it when you want persistent schema cache across isolates.
+  // Without it the worker still works; schema is cached in RAM per isolate lifetime (1h TTL).
+  // "kv_namespaces": [{ "binding": "SCHEMA_KV", "id": "<your-kv-id>" }],
 
   "env": {
     "client_a": {
-      "name": "larabitrix-client-a",
-      "kv_namespaces": [
-        {
-          "binding": "SCHEMA_KV",
-          "id": "placeholder_kv_id_client_a"
-        }
-      ]
+      "name": "larabitrix-client-a"
+      // "kv_namespaces": [{ "binding": "SCHEMA_KV", "id": "<client_a_kv_id>" }]
     },
     "client_b": {
-      "name": "larabitrix-client-b",
-      "kv_namespaces": [
-        {
-          "binding": "SCHEMA_KV",
-          "id": "placeholder_kv_id_client_b"
-        }
-      ]
+      "name": "larabitrix-client-b"
+      // "kv_namespaces": [{ "binding": "SCHEMA_KV", "id": "<client_b_kv_id>" }]
     }
   }
 }

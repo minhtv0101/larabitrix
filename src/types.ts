@@ -1,5 +1,5 @@
 export interface Env {
-  SCHEMA_KV: KVNamespace;
+  SCHEMA_KV?: KVNamespace; // optional — worker functions without it, schema fetched from Bitrix each cold start
   BITRIX_WEBHOOK_URL: string;
   WORKER_API_KEY: string;
 }

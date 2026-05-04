@@ -20,14 +20,16 @@ export async function buildListSchema(
   const cached = schemaCache.get(iblockId);
   if (cached && Date.now() - cached.fetchedAt < RAM_TTL_MS) return cached;
 
-  // Layer 2: KV
-  const kvSchema = await env.SCHEMA_KV.get<BitrixSchema>(
-    `schema:${iblockId}`,
-    { type: "json", cacheTtl: 300 }
-  );
-  if (kvSchema) {
-    schemaCache.set(iblockId, kvSchema);
-    return kvSchema;
+  // Layer 2: KV (optional — skipped if namespace not provisioned)
+  if (env.SCHEMA_KV) {
+    const kvSchema = await env.SCHEMA_KV.get<BitrixSchema>(
+      `schema:${iblockId}`,
+      { type: "json", cacheTtl: 300 }
+    );
+    if (kvSchema) {
+      schemaCache.set(iblockId, kvSchema);
+      return kvSchema;
+    }
   }
 
   // Layer 3: Bitrix24 API
@@ -64,9 +66,11 @@ export async function buildListSchema(
     fetchedAt: Date.now(),
   };
 
-  await env.SCHEMA_KV.put(`schema:${iblockId}`, JSON.stringify(schema), {
-    expirationTtl: 86400,
-  });
+  if (env.SCHEMA_KV) {
+    await env.SCHEMA_KV.put(`schema:${iblockId}`, JSON.stringify(schema), {
+      expirationTtl: 86400,
+    });
+  }
   schemaCache.set(iblockId, schema);
 
   return schema;
@@ -124,5 +128,7 @@ export async function invalidateSchema(
   iblockId: string
 ): Promise<void> {
   schemaCache.delete(iblockId);
-  await env.SCHEMA_KV.delete(`schema:${iblockId}`);
+  if (env.SCHEMA_KV) {
+    await env.SCHEMA_KV.delete(`schema:${iblockId}`);
+  }
 }

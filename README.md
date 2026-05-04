@@ -106,13 +106,9 @@ npm test
 # 1. Authenticate Wrangler with your Cloudflare account
 wrangler login
 
-# 2. Create KV namespace (run once per client)
-wrangler kv namespace create SCHEMA_KV
-# Copy the returned `id` into wrangler.jsonc under the correct env block
-
-# 3. Deploy
+# 2. Deploy (KV is optional — see below)
 npm run deploy
-# or deploy to a specific client environment:
+# or deploy to a named client environment:
 wrangler deploy --env client_a
 ```
 
@@ -126,7 +122,7 @@ wrangler secret put WORKER_API_KEY --env client_a
 
 ### Multi-client strategy
 
-Each client gets its own named Worker and KV namespace, all from this single repo:
+Each client gets its own named Worker, all from this single repo:
 
 ```bash
 # Client A
@@ -140,7 +136,7 @@ wrangler secret put BITRIX_WEBHOOK_URL --env client_b
 wrangler secret put WORKER_API_KEY --env client_b
 ```
 
-Add new clients by adding a new block under `"env"` in `wrangler.jsonc` with a fresh KV namespace ID.
+Add new clients by adding a new block under `"env"` in `wrangler.jsonc`.
 
 ### View real-time logs
 
@@ -150,12 +146,28 @@ wrangler tail --env client_a
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `BITRIX_WEBHOOK_URL` | Bitrix24 incoming webhook URL (e.g. `https://your-domain.bitrix24.com/rest/1/xxxx/`) |
-| `WORKER_API_KEY` | Secret key used by callers in `Authorization: Bearer` header |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BITRIX_WEBHOOK_URL` | Yes | Bitrix24 incoming webhook URL (e.g. `https://your-domain.bitrix24.com/rest/1/xxxx/`) |
+| `WORKER_API_KEY` | Yes | Secret key used by callers in `Authorization: Bearer` header |
 
-Both are provisioned as Cloudflare secrets via `wrangler secret put` — never stored in `wrangler.jsonc`.
+Provisioned via `wrangler secret put` — never stored in `wrangler.jsonc`.
+
+### Cloudflare KV (optional)
+
+KV is **not required** to run the worker. Schema is cached in Worker RAM (1h TTL per isolate) by default.
+
+Add KV if you want schema to persist across isolate restarts and reduce cold-start Bitrix API calls:
+
+```bash
+# Create once per client
+wrangler kv namespace create SCHEMA_KV --env client_a
+
+# Uncomment kv_namespaces in wrangler.jsonc and fill in the returned id
+```
+
+Without KV: schema is re-fetched from Bitrix on isolate cold start, then cached in RAM.
+With KV: schema survives isolate restarts (24h TTL) — fewer Bitrix API calls in production.
 
 ## Example Request
 
