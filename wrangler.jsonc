@@ -2,20 +2,11 @@
   "name": "larabitrix",
   "main": "src/index.ts",
   "compatibility_date": "2026-05-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat"]
 
-  // SCHEMA_KV is optional — add it when you want persistent schema cache across isolates.
-  // Without it the worker still works; schema is cached in RAM per isolate lifetime (1h TTL).
-  // "kv_namespaces": [{ "binding": "SCHEMA_KV", "id": "<your-kv-id>" }],
-
-  "env": {
-    "client_a": {
-      "name": "larabitrix-client-a"
-      // "kv_namespaces": [{ "binding": "SCHEMA_KV", "id": "<client_a_kv_id>" }]
-    },
-    "client_b": {
-      "name": "larabitrix-client-b"
-      // "kv_namespaces": [{ "binding": "SCHEMA_KV", "id": "<client_b_kv_id>" }]
-    }
-  }
+  // SCHEMA_KV là tuỳ chọn — không cần thiết để chạy.
+  // Nếu muốn cache schema lâu dài (giảm Bitrix API calls khi Worker restart):
+  //   1. wrangler kv namespace create SCHEMA_KV
+  //   2. Uncomment và điền id bên dưới:
+  // "kv_namespaces": [{ "binding": "SCHEMA_KV", "id": "<id-từ-bước-trên>" }]
 }

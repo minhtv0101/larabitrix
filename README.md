@@ -57,35 +57,6 @@ Xong. Worker đã sẵn sàng.
 
 ---
 
-## Deploy cho nhiều công ty (multi-client)
-
-Một repo duy nhất, mỗi công ty một Worker riêng biệt:
-
-**1. Thêm client mới vào `wrangler.jsonc`:**
-
-```jsonc
-"env": {
-  "cong_ty_a": { "name": "larabitrix-cong-ty-a" },
-  "cong_ty_b": { "name": "larabitrix-cong-ty-b" }
-}
-```
-
-**2. Deploy và nạp secrets cho từng client:**
-
-```bash
-wrangler deploy --env cong_ty_a
-wrangler secret put BITRIX_WEBHOOK_URL --env cong_ty_a
-wrangler secret put WORKER_API_KEY --env cong_ty_a
-
-wrangler deploy --env cong_ty_b
-wrangler secret put BITRIX_WEBHOOK_URL --env cong_ty_b
-wrangler secret put WORKER_API_KEY --env cong_ty_b
-```
-
-Mỗi client có URL riêng, webhook Bitrix riêng, key riêng — hoàn toàn độc lập.
-
----
-
 ## API Reference
 
 Mọi request cần header: `Authorization: Bearer <WORKER_API_KEY>`
@@ -142,7 +113,6 @@ curl -X PATCH https://larabitrix.<ten-ban>.workers.dev/api/crm/contact/upsert/PH
 **Xem log realtime:**
 ```bash
 wrangler tail
-wrangler tail --env cong_ty_a   # nếu dùng multi-client
 ```
 
 **Có cần Cloudflare KV không?** Không cần. KV chỉ là cache tùy chọn giúp schema tồn tại lâu hơn giữa các lần Worker restart. Không có KV, Worker vẫn chạy bình thường.
