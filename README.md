@@ -1,189 +1,153 @@
 # Larabitrix
 
-Cloudflare Worker middleware that wraps Bitrix24 REST API into a clean RESTful interface. Acts as an API Gateway + ORM layer between automation platforms (n8n, Wix, custom apps) and Bitrix24.
+Một lớp trung gian (Cloudflare Worker) đứng giữa n8n / Wix / app của bạn và Bitrix24. Thay vì gọi thẳng vào API phức tạp của Bitrix, bạn gọi vào Larabitrix bằng JSON sạch sẽ — nó tự lo phần còn lại.
 
-## Features
+**Larabitrix giải quyết gì?**
 
-- **Dynamic Schema Mapping** — auto-learns Bitrix24 field IDs and exposes them as human-readable slugs (`PROPERTY_112` → `so_buoi_hoc`)
-- **ORM operations** — `upsert`, `math` (increment/decrement), `softDelete`, `paginate`
-- **Read-before-write** — prevents accidental field erasure on `lists.element.update`
-- **Rate limiter** — enforces ≤ 2 req/s via 550ms sleep + exponential backoff retry (max 3)
-- **CRM entities** — unified ORM for Contact, Company, Deal with auto-bind support
-- **Schema cache** — persists to Cloudflare KV; avoids redundant `lists.field.get` calls
-- **Multi-tenant** — one codebase, one deploy per client via Wrangler environments
+| Vấn đề của Bitrix24 | Larabitrix xử lý như thế nào |
+|---------------------|------------------------------|
+| Tên trường là `PROPERTY_112` — không ai nhớ nổi | Tự học và dịch thành `so_buoi_hoc` |
+| `lists.element.update` xóa trắng trường nếu không truyền | Tự GET dữ liệu cũ rồi merge trước khi update |
+| Rate limit 2 req/s, dễ bị 429 | Tự giới hạn tốc độ + retry tự động |
+| Upsert (tìm có thì update, không có thì tạo mới) phải viết tay | Endpoint `upsert/:field` xử lý sẵn |
 
-## Architecture
+---
 
-```
-n8n / Wix / App
-       │
-       ▼ Bearer Token
-  ┌─────────────────────────────┐
-  │       Larabitrix Worker      │
-  │  Auth → Router → Schema      │
-  │  Mapper → ORM → Rate Limiter │
-  └───────────────┬─────────────┘
-        KV Cache  │
-                  ▼
-           Bitrix24 REST API
-```
+## Cách dùng nhanh
 
-## API Endpoints
+### Bước 1 — Chuẩn bị
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check (no auth) |
-| `GET` | `/api/lists/:id?page=1` | List items with pagination |
-| `POST` | `/api/lists/:id` | Create item |
-| `PATCH` | `/api/lists/:id/upsert/:field` | Upsert item by unique field |
-| `PATCH` | `/api/lists/:id/:itemId/math/:field` | Increment/decrement a numeric field |
-| `PATCH` | `/api/lists/:id/:itemId/soft-delete` | Soft delete (marks `is_deleted = Y`) |
-| `PATCH` | `/api/crm/contact/upsert/PHONE` | Upsert CRM Contact by phone |
-| `PATCH` | `/api/crm/company/upsert/UF_CRM_MST` | Upsert CRM Company by tax code |
-| `POST` | `/api/crm/deal` | Create Deal (with optional contact/company binding) |
-| `DELETE` | `/api/cache/:id` | Invalidate schema cache for a List |
-
-All `/api/*` routes require `Authorization: Bearer <WORKER_API_KEY>`.
-
-## Project Structure
-
-```
-src/
-├── index.ts                  # Entry point, route mounts, global error handler
-├── types.ts                  # Env, schema, and response type definitions
-├── middleware/
-│   ├── auth.ts               # Bearer token validation
-│   └── rate-limiter.ts       # 550ms sleep + retry logic
-├── routes/
-│   ├── lists.ts              # Lists CRUD + cache routes
-│   └── crm.ts                # CRM entity routes
-├── services/
-│   ├── bitrix24-client.ts    # Fetch wrapper with retry/error handling
-│   ├── schema-mapper.ts      # Field slug ↔ PROPERTY_ID mapping + KV cache
-│   ├── orm-lists.ts          # Lists ORM (upsert, math, softDelete, paginate)
-│   └── orm-crm.ts            # CRM ORM (upsert, bind entities)
-└── tests/
-    ├── _helpers.ts
-    ├── auth.test.ts
-    ├── lists-routes.test.ts
-    ├── crm-routes.test.ts
-    ├── orm.test.ts
-    └── schema-mapper.test.ts
-```
-
-## Prerequisites
-
-- Node.js 18+
-- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/) — `npm install -g wrangler`
-- Cloudflare account with Workers and KV enabled
-- Bitrix24 account with REST API webhook URL
-
-## Local Development
+Cần có:
+- [Node.js 18+](https://nodejs.org/)
+- Tài khoản [Cloudflare](https://cloudflare.com/) (miễn phí)
+- Webhook URL của Bitrix24 (lấy tại **Bitrix24 → Tích hợp → Webhook → Incoming**)
 
 ```bash
-# Install dependencies
+npm install -g wrangler   # cài Wrangler CLI một lần
+```
+
+### Bước 2 — Cài và test local
+
+```bash
+git clone https://github.com/minhtv0101/larabitrix.git
+cd larabitrix
 npm install
-
-# Copy env example
-cp .env.example .env.local
-# Fill in BITRIX_WEBHOOK_URL and WORKER_API_KEY
-
-# Start local dev server (http://localhost:8787)
-npm run dev
-
-# Type check
-npm run typecheck
-
-# Run tests
-npm test
+npm test          # chạy 43 tests để kiểm tra
 ```
 
-## Deploy
-
-### First-time setup
+### Bước 3 — Deploy lên Cloudflare
 
 ```bash
-# 1. Authenticate Wrangler with your Cloudflare account
-wrangler login
+wrangler login    # đăng nhập Cloudflare, mở trình duyệt tự động
 
-# 2. Deploy (KV is optional — see below)
-npm run deploy
-# or deploy to a named client environment:
-wrangler deploy --env client_a
+wrangler deploy   # deploy Worker, lấy URL dạng: https://larabitrix.<ten-ban>.workers.dev
 ```
 
-### Provision secrets (per client)
+### Bước 4 — Nạp 2 biến bí mật
 
 ```bash
-# Set via Wrangler — never commit these values
-wrangler secret put BITRIX_WEBHOOK_URL --env client_a
-wrangler secret put WORKER_API_KEY --env client_a
+wrangler secret put BITRIX_WEBHOOK_URL
+# Dán vào: https://your-domain.bitrix24.com/rest/1/xxxxxxxxxxxxx/
+
+wrangler secret put WORKER_API_KEY
+# Tự đặt một chuỗi bí mật bất kỳ, VD: my-secret-key-2024
 ```
 
-### Multi-client strategy
+Xong. Worker đã sẵn sàng.
 
-Each client gets its own named Worker, all from this single repo:
+---
 
-```bash
-# Client A
-wrangler deploy --env client_a
-wrangler secret put BITRIX_WEBHOOK_URL --env client_a
-wrangler secret put WORKER_API_KEY --env client_a
+## Deploy cho nhiều công ty (multi-client)
 
-# Client B
-wrangler deploy --env client_b
-wrangler secret put BITRIX_WEBHOOK_URL --env client_b
-wrangler secret put WORKER_API_KEY --env client_b
+Một repo duy nhất, mỗi công ty một Worker riêng biệt:
+
+**1. Thêm client mới vào `wrangler.jsonc`:**
+
+```jsonc
+"env": {
+  "cong_ty_a": { "name": "larabitrix-cong-ty-a" },
+  "cong_ty_b": { "name": "larabitrix-cong-ty-b" }
+}
 ```
 
-Add new clients by adding a new block under `"env"` in `wrangler.jsonc`.
-
-### View real-time logs
+**2. Deploy và nạp secrets cho từng client:**
 
 ```bash
-wrangler tail --env client_a
+wrangler deploy --env cong_ty_a
+wrangler secret put BITRIX_WEBHOOK_URL --env cong_ty_a
+wrangler secret put WORKER_API_KEY --env cong_ty_a
+
+wrangler deploy --env cong_ty_b
+wrangler secret put BITRIX_WEBHOOK_URL --env cong_ty_b
+wrangler secret put WORKER_API_KEY --env cong_ty_b
 ```
 
-## Environment Variables
+Mỗi client có URL riêng, webhook Bitrix riêng, key riêng — hoàn toàn độc lập.
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `BITRIX_WEBHOOK_URL` | Yes | Bitrix24 incoming webhook URL (e.g. `https://your-domain.bitrix24.com/rest/1/xxxx/`) |
-| `WORKER_API_KEY` | Yes | Secret key used by callers in `Authorization: Bearer` header |
+---
 
-Provisioned via `wrangler secret put` — never stored in `wrangler.jsonc`.
+## API Reference
 
-### Cloudflare KV (optional)
+Mọi request cần header: `Authorization: Bearer <WORKER_API_KEY>`
 
-KV is **not required** to run the worker. Schema is cached in Worker RAM (1h TTL per isolate) by default.
+### Lists (Universal Lists của Bitrix24)
 
-Add KV if you want schema to persist across isolate restarts and reduce cold-start Bitrix API calls:
-
-```bash
-# Create once per client
-wrangler kv namespace create SCHEMA_KV --env client_a
-
-# Uncomment kv_namespaces in wrangler.jsonc and fill in the returned id
+```
+GET    /api/lists/:listId               Lấy danh sách (hỗ trợ ?page=2)
+POST   /api/lists/:listId               Tạo mới item
+PATCH  /api/lists/:listId/upsert/:field Tìm theo field, update nếu có / tạo mới nếu không
+PATCH  /api/lists/:listId/:itemId/math/:field   Cộng/trừ giá trị số (VD: số buổi học)
+DELETE /api/lists/:listId/:itemId       Xóa item
+DELETE /api/cache/:listId               Xóa cache schema (khi bạn thêm trường mới trong Bitrix)
 ```
 
-Without KV: schema is re-fetched from Bitrix on isolate cold start, then cached in RAM.
-With KV: schema survives isolate restarts (24h TTL) — fewer Bitrix API calls in production.
+### CRM
 
-## Example Request
+```
+PATCH  /api/crm/contact/upsert/PHONE        Upsert Contact theo số điện thoại
+PATCH  /api/crm/company/upsert/UF_CRM_MST   Upsert Company theo mã số thuế
+POST   /api/crm/deal                         Tạo Deal
+```
+
+### Ví dụ thực tế
 
 ```bash
-# Upsert a CRM contact by phone
-curl -X PATCH https://larabitrix-client-a.your-subdomain.workers.dev/api/crm/contact/upsert/PHONE \
-  -H "Authorization: Bearer YOUR_WORKER_API_KEY" \
+# Upsert học viên trong Lists (tự dịch tên trường, tự merge dữ liệu cũ)
+curl -X PATCH https://larabitrix.<ten-ban>.workers.dev/api/lists/42/upsert/ma_hoc_vien \
+  -H "Authorization: Bearer my-secret-key-2024" \
   -H "Content-Type: application/json" \
-  -d '{"PHONE": [{"VALUE": "0901234567", "VALUE_TYPE": "WORK"}], "NAME": "Nguyen Van A"}'
+  -d '{"ma_hoc_vien": "HV001", "so_buoi_hoc": 10, "trang_thai": "dang_hoc"}'
 
-# Upsert a Lists item by unique slug field
-curl -X PATCH https://larabitrix-client-a.your-subdomain.workers.dev/api/lists/42/upsert/ma_hoc_vien \
-  -H "Authorization: Bearer YOUR_WORKER_API_KEY" \
+# Trừ 1 buổi học
+curl -X PATCH https://larabitrix.<ten-ban>.workers.dev/api/lists/42/HV001-item-id/math/so_buoi_hoc \
+  -H "Authorization: Bearer my-secret-key-2024" \
   -H "Content-Type: application/json" \
-  -d '{"ma_hoc_vien": "HV001", "so_buoi_hoc": 10}'
+  -d '{"amount": -1}'
+
+# Upsert contact theo SĐT
+curl -X PATCH https://larabitrix.<ten-ban>.workers.dev/api/crm/contact/upsert/PHONE \
+  -H "Authorization: Bearer my-secret-key-2024" \
+  -H "Content-Type: application/json" \
+  -d '{"phone": "0901234567", "NAME": "Nguyen Van A"}'
 ```
+
+---
+
+## Câu hỏi thường gặp
+
+**Tên trường lấy từ đâu?** Larabitrix tự gọi Bitrix API để học cấu trúc List của bạn. Tên trường trong Bitrix (VD: "Số buổi học") sẽ được chuyển thành slug (`so_buoi_hoc`) để dùng trong JSON.
+
+**Thêm trường mới trong Bitrix thì sao?** Gọi `DELETE /api/cache/:listId` để xóa cache schema. Lần sau sẽ tự học lại.
+
+**Xem log realtime:**
+```bash
+wrangler tail
+wrangler tail --env cong_ty_a   # nếu dùng multi-client
+```
+
+**Có cần Cloudflare KV không?** Không cần. KV chỉ là cache tùy chọn giúp schema tồn tại lâu hơn giữa các lần Worker restart. Không có KV, Worker vẫn chạy bình thường.
+
+---
 
 ## License
 
